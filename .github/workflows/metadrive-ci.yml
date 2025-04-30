@@ -1,0 +1,129 @@
+name: metadrive-ci
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential patchelf libgl1-mesa-dev libosmesa6 mesa-utils
+
+      - name: Python deps
+        run: |
+          pip install --upgrade pip
+          pip install panda3d==1.10.14 metadrive-simulator==0.4.0.dev20250201 numpy pytest
+
+      - name: Cache SCons
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/scons
+            build
+          key: ${{ runner.os }}-scons-${{ hashFiles('SConstruct') }}
+          restore-keys: ${{ runner.os }}-scons-
+
+      - name: Build openpilot
+        env:
+          ONNXCPU: 1
+        run: |
+          ./ubuntu_setup.sh
+          scons -u -j2
+
+      - name: Pack build
+        run: tar czf openpilot_build.tar.gz build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openpilot_build
+          path: openpilot_build.tar.gz
+          retention-days: 1
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4,5]
+    concurrency:
+      group: metadrive-${{ github.ref }}-${{ matrix.shard }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri libosmesa6 mesa-utils patchelf
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: openpilot_build
+
+      - name: Unpack build
+        run: tar xzf openpilot_build.tar.gz
+
+      - name: Python deps
+        run: |
+          pip install panda3d==1.10.14 metadrive-simulator==0.4.0.dev20250201 numpy pytest
+
+      - name: Run MetaDrive tests (5 loops)
+        env:
+          DISPLAY: ":99"
+          PYTHONHASHSEED: "0"
+          OMP_NUM_THREADS: "2"
+          MKL_DISABLE_FAST_MM: "1"
+          ONNX_DISABLE_EXTENSIONS: "1"
+          LOOPS: "5"
+        run: |
+          Xvfb :99 -screen 0 2160x1080x24 &
+          sleep 3
+          for i in $(seq 1 $LOOPS); do
+            echo "Loop $i / $LOOPS"
+            pytest tools/sim/tests/test_metadrive_bridge.py -q || exit 1
+          done
+
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          tar czf artifacts/logs-${{ matrix.shard }}.tar.gz tmp/qlog tmp/rlog tmp/camera || true
+
+      - name: Capture Xvfb screen
+        if: always()
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y x11-apps imagemagick libxext6 libsm6
+          xwd -silent -root -display :99 | convert -resize 1280x720 xwd:- png:snap.png
+          mv snap.png artifacts/
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metadrive-artifacts-${{ matrix.shard }}
+          path: artifacts/
+          retention-days: 1
+
+      - name: Delete prior logs
+        if: always()
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: metadrive-artifacts-${{ matrix.shard }}
+          failOnError: false
