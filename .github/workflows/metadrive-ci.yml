@@ -3,8 +3,9 @@ name: metadrive-ci
 on:
   push:
     branches:
-      - master
+      - '**'
   pull_request:
+  workflow_dispatch:
 
 jobs:
   simulator_driving:
