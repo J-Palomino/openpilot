@@ -35,6 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
   && rm -rf /var/lib/apt/lists/*
 
+# Ensure CA certificates are installed for wget/curl over HTTPS
+RUN apt-get update && apt-get install -y ca-certificates
+
 RUN mkdir -p /tmp/opencl-driver-intel && \
     cd /tmp/opencl-driver-intel && \
     wget https://github.com/intel/llvm/releases/download/2024-WW14/oclcpuexp-2024.17.3.0.09_rel.tar.gz && \
