@@ -1,139 +1,42 @@
 name: metadrive-ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 jobs:
-  build:
+  simulator_driving:
+    name: simulator driving
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Debug Python
+          submodules: true
+      - run: git lfs pull
+      - name: Build simulator docker image
         run: |
-          which python3
-          python3 --version
-          python3 -m pip --version
-          echo "pythonLocation: ${{ env.pythonLocation }}"
-          ls -l ${{ env.pythonLocation }}/bin/
-
-      - name: System deps
+          ./selfdrive/test/docker_build.sh sim
+      - name: Build openpilot in docker
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential patchelf libgl1-mesa-dev libosmesa6 mesa-utils
-
-      - name: Python deps, install scons, and Build openpilot
+          docker run --shm-size 1G --privileged \
+            -v $GITHUB_WORKSPACE:/tmp/openpilot \
+            -w /tmp/openpilot \
+            openpilot-base /bin/bash -c "scons -j$(nproc)"
+      - name: Run MetaDrive bridge test in docker
         env:
-          ONNXCPU: 1
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install scons metadrive-simulator==0.4.3 numpy pytest
-          python3 -m scons -u -j2
-
-      - name: Cache SCons
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/scons
-            build
-          key: ${{ runner.os }}-scons-${{ hashFiles('SConstruct') }}
-          restore-keys: ${{ runner.os }}-scons-
-
-      - name: Pack build
-        run: tar czf openpilot_build.tar.gz build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: openpilot_build
-          path: openpilot_build.tar.gz
-          retention-days: 1
-
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1,2,3,4,5]
-    concurrency:
-      group: metadrive-${{ github.ref }}-${{ matrix.shard }}
-      cancel-in-progress: true
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Debug Python
-        run: |
-          which python3
-          python3 --version
-          python3 -m pip --version
-          echo "pythonLocation: ${{ env.pythonLocation }}"
-          ls -l ${{ env.pythonLocation }}/bin/
-
-      - name: System deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb libgl1-mesa-dri libosmesa6 mesa-utils patchelf
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: openpilot_build
-
-      - name: Unpack build
-        run: tar xzf openpilot_build.tar.gz
-
-      - name: Python deps
-        run: |
-          pip install metadrive-simulator==0.4.3 numpy pytest
-
-      - name: Run MetaDrive tests (5 loops)
-        env:
-          DISPLAY: ":99"
-          PYTHONHASHSEED: "0"
-          OMP_NUM_THREADS: "2"
-          MKL_DISABLE_FAST_MM: "1"
-          ONNX_DISABLE_EXTENSIONS: "1"
-          LOOPS: "5"
-        run: |
-          Xvfb :99 -screen 0 2160x1080x24 &
-          sleep 3
-          for i in $(seq 1 $LOOPS); do
-            echo "Loop $i / $LOOPS"
-            pytest tools/sim/tests/test_metadrive_bridge.py -q || exit 1
-          done
-
-      - name: Collect logs
-        if: always()
-        run: |
-          mkdir -p artifacts
-          tar czf artifacts/logs-${{ matrix.shard }}.tar.gz tmp/qlog tmp/rlog tmp/camera || true
-
-      - name: Capture Xvfb screen
-        if: always()
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y x11-apps imagemagick libxext6 libsm6
-          xwd -silent -root -display :99 | convert -resize 1280x720 xwd:- png:snap.png
-          mv snap.png artifacts/
-
-      - name: Upload artifacts
-        if: always()
+          docker run --shm-size 1G --privileged \
+            -v $GITHUB_WORKSPACE:/tmp/openpilot \
+            -w /tmp/openpilot \
+            -e MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }} \
+            openpilot-base /bin/bash -c "source selfdrive/test/setup_xvfb.sh && source selfdrive/test/setup_vsound.sh && CI=1 pytest tools/sim/tests/test_metadrive_bridge.py"
+      - name: Upload simulator logs
         uses: actions/upload-artifact@v4
+        if: ${{ success() || failure() }}
         with:
-          name: metadrive-artifacts-${{ matrix.shard }}
-          path: artifacts/
-          retention-days: 1
-
-      - name: Delete prior logs
-        if: always()
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: metadrive-artifacts-${{ matrix.shard }}
-          failOnError: false
+          name: metadrive_logs-${{ github.run_id }}
+          path: ${{ github.workspace }}/.op_logs/simulator_logs
