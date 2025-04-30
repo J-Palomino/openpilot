@@ -40,7 +40,7 @@ jobs:
         env:
           ONNXCPU: 1
         run: |
-          scons -u -j2
+          python3 -m scons -u -j2
 
       - name: Pack build
         run: tar czf openpilot_build.tar.gz build
