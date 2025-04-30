@@ -18,7 +18,7 @@ jobs:
       - run: git lfs pull
       - name: Build simulator docker image
         run: |
-          ./selfdrive/test/docker_build.sh sim
+          docker build -f Dockerfile.openpilot_base -t openpilot-base .
       - name: Build openpilot in docker
         run: |
           docker run --shm-size 1G --privileged \

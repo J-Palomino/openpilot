@@ -75,6 +75,7 @@ ENV VIRTUAL_ENV=/home/$USER/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN cd /home/$USER && \
     tools/install_python_dependencies.sh && \
+    pip install scons && \
     rm -rf tools/ pyproject.toml uv.lock .cache
 
 USER root
