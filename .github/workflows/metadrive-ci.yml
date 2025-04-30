@@ -35,7 +35,6 @@ jobs:
         env:
           ONNXCPU: 1
         run: |
-          ./ubuntu_setup.sh
           scons -u -j2
 
       - name: Pack build
