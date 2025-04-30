@@ -80,8 +80,8 @@ USER $USER
 # ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN cd /home/$USER && \
 #     tools/install_python_dependencies.sh && \
-    pip install scons && \
 #     rm -rf tools/ pyproject.toml uv.lock .cache
 
 USER root
+RUN pip install scons
 RUN sudo git config --global --add safe.directory /tmp/openpilot
