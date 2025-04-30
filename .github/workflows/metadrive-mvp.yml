@@ -20,3 +20,6 @@ jobs:
       - name: Check Python, pip, and scons in Docker
         run: |
           docker run --rm openpilot-base /bin/bash -c "python3 --version && pip --version && pip list && which scons && scons --version || echo 'scons not found'"
+      - name: Run MetaDrive smoke test
+        run: |
+          docker run --rm openpilot-base /bin/bash -c "python3 -m metadrive --help || echo 'MetaDrive not found'"
