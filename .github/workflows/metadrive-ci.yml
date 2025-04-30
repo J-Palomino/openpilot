@@ -17,10 +17,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential patchelf libgl1-mesa-dev libosmesa6 mesa-utils
 
-      - name: Python deps
+      - name: Python deps, install scons, and Build openpilot
+        env:
+          ONNXCPU: 1
         run: |
           pip install --upgrade pip
           pip install scons metadrive-simulator==0.4.3 numpy pytest
+          python3 -m scons -u -j2
 
       - name: Cache SCons
         uses: actions/cache@v4
@@ -30,12 +33,6 @@ jobs:
             build
           key: ${{ runner.os }}-scons-${{ hashFiles('SConstruct') }}
           restore-keys: ${{ runner.os }}-scons-
-
-      - name: Build openpilot
-        env:
-          ONNXCPU: 1
-        run: |
-          python3 -m scons -u -j2
 
       - name: Pack build
         run: tar czf openpilot_build.tar.gz build
