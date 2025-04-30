@@ -31,6 +31,11 @@ jobs:
           key: ${{ runner.os }}-scons-${{ hashFiles('SConstruct') }}
           restore-keys: ${{ runner.os }}-scons-
 
+      - name: Install SCons
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y scons
+
       - name: Build openpilot
         env:
           ONNXCPU: 1
