@@ -22,6 +22,11 @@ jobs:
           pip install --upgrade pip
           pip install metadrive-simulator==0.4.3 numpy pytest
 
+      - name: Install SCons
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y scons
+
       - name: Cache SCons
         uses: actions/cache@v4
         with:
@@ -30,11 +35,6 @@ jobs:
             build
           key: ${{ runner.os }}-scons-${{ hashFiles('SConstruct') }}
           restore-keys: ${{ runner.os }}-scons-
-
-      - name: Install SCons
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y scons
 
       - name: Build openpilot
         env:
