@@ -1,0 +1,22 @@
+name: metadrive-mvp
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  minimal_metadrive_ci:
+    name: Minimal MetaDrive Docker CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build minimal Docker image (base)
+        run: |
+          docker build -f Dockerfile.openpilot_base -t openpilot-base .
+      - name: Check Python, pip, and scons in Docker
+        run: |
+          docker run --rm openpilot-base /bin/bash -c "python3 --version && pip --version && pip list && which scons && scons --version || echo 'scons not found'"
