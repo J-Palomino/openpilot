@@ -315,15 +315,21 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/workflows/setup-with-retry
+    - name: Install system dependencies for MetaDrive
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libgl1-mesa-glx libglib2.0-0
+    - name: Install MetaDrive and Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install metadrive panda3d numpy
     - name: Build openpilot
       run: |
         ${{ env.RUN }} "scons -j$(nproc)"
     - name: Driving test
       timeout-minutes: 1
       run: |
-        ${{ env.RUN }} "source selfdrive/test/setup_xvfb.sh && \
-                        source selfdrive/test/setup_vsound.sh && \
-                        CI=1 pytest -s tools/sim/tests/test_metadrive_bridge.py"
+        xvfb-run -a pytest -s tools/sim/tests/test_metadrive_bridge.py
 
   create_ui_report:
     # This job name needs to be the same as UI_JOB_NAME in ui_preview.yaml
